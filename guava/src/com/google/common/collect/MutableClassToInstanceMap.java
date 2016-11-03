@@ -60,7 +60,7 @@ public final class MutableClassToInstanceMap<B> extends ForwardingMap<Class<? ex
   public static <B> MutableClassToInstanceMap<B> create(Map<Class<? extends B>, B> backingMap) {
     return new MutableClassToInstanceMap<B>(backingMap);
   }
-  
+
   private final Map<Class<? extends B>, B> delegate;
 
   private MutableClassToInstanceMap(Map<Class<? extends B>, B> delegate) {
