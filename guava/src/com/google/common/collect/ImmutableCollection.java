@@ -25,6 +25,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.io.Serializable;
 import java.util.AbstractCollection;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -59,9 +60,10 @@ import javax.annotation.Nullable;
  *     collection is modified.
  * <li><b>Null-hostility.</b> This collection will never contain a null element.
  * <li><b>Deterministic iteration.</b> The iteration order is always well-defined, depending on how
- *     the collection was created (see the appropriate factory method for details). View collections
- *     such as {@link ImmutableMultiset#elementSet} iterate in the same order as the parent, except
- *     as noted.
+ *     the collection was created. Typically this is insertion order unless an explicit ordering is
+ *     otherwise specified (e.g. {@link ImmutableSortedSet#naturalOrder}).  See the appropriate
+ *     factory method for details. View collections such as {@link ImmutableMultiset#elementSet}
+ *     iterate in the same order as the parent, except as noted.
  * <li><b>Thread safety.</b> It is safe to access this collection concurrently from multiple
  *     threads.
  * <li><b>Integrity.</b> This type cannot be subclassed outside this package (which would allow
@@ -175,12 +177,14 @@ public abstract class ImmutableCollection<E> extends AbstractCollection<E> imple
   public Spliterator<E> spliterator() {
     return Spliterators.spliterator(this, SPLITERATOR_CHARACTERISTICS);
   }
+  
+  private static final Object[] EMPTY_ARRAY = {};
 
   @Override
   public final Object[] toArray() {
     int size = size();
     if (size == 0) {
-      return ObjectArrays.EMPTY_ARRAY;
+      return EMPTY_ARRAY;
     }
     Object[] result = new Object[size];
     copyIntoArray(result, 0);
@@ -465,7 +469,7 @@ public abstract class ImmutableCollection<E> extends AbstractCollection<E> imple
     private void ensureCapacity(int minCapacity) {
       if (contents.length < minCapacity) {
         this.contents =
-            ObjectArrays.arraysCopyOf(
+            Arrays.copyOf(
                 this.contents, expandedCapacity(contents.length, minCapacity));
       }
     }

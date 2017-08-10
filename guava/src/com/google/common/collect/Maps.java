@@ -19,9 +19,7 @@ package com.google.common.collect;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.compose;
-import static com.google.common.base.Predicates.equalTo;
-import static com.google.common.base.Predicates.in;
-import static com.google.common.base.Predicates.not;
+import static com.google.common.collect.CollectPreconditions.checkEntryNotNull;
 import static com.google.common.collect.CollectPreconditions.checkNonnegative;
 
 import com.google.common.annotations.Beta;
@@ -30,15 +28,11 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Converter;
 import com.google.common.base.Equivalence;
 import com.google.common.base.Function;
-import com.google.common.base.Joiner.MapJoiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.MapDifference.ValueDifference;
-import com.google.common.collect.Maps.IteratorBasedAbstractMap;
-import com.google.common.collect.Maps.ViewCachingAbstractMap;
-import com.google.common.collect.Sets.ImprovedAbstractSet;
 import com.google.common.primitives.Ints;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.j2objc.annotations.RetainedWith;
@@ -67,10 +61,13 @@ import java.util.SortedSet;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
+import java.util.stream.Collector;
 import javax.annotation.Nullable;
 
 /**
@@ -146,15 +143,124 @@ public final class Maps {
       @SuppressWarnings("unchecked") // safe covariant cast
       ImmutableEnumMap<K, V> result = (ImmutableEnumMap<K, V>) map;
       return result;
-    } else if (map.isEmpty()) {
-      return ImmutableMap.of();
-    } else {
-      for (Map.Entry<K, ? extends V> entry : map.entrySet()) {
-        checkNotNull(entry.getKey());
-        checkNotNull(entry.getValue());
-      }
-      return ImmutableEnumMap.asImmutable(new EnumMap<K, V>(map));
     }
+    Iterator<? extends Map.Entry<K, ? extends V>> entryItr = map.entrySet().iterator();
+    if (!entryItr.hasNext()) {
+      return ImmutableMap.of();
+    }
+    Map.Entry<K, ? extends V> entry1 = entryItr.next();
+    K key1 = entry1.getKey();
+    V value1 = entry1.getValue();
+    checkEntryNotNull(key1, value1);
+    Class<K> clazz = key1.getDeclaringClass();
+    EnumMap<K, V> enumMap = new EnumMap<K, V>(clazz);
+    enumMap.put(key1, value1);
+    while (entryItr.hasNext()) {
+      Entry<K, ? extends V> entry = entryItr.next();
+      K key = entry.getKey();
+      V value = entry.getValue();
+      checkEntryNotNull(key, value);
+      enumMap.put(key, value);
+    }
+    return ImmutableEnumMap.asImmutable(enumMap);
+  }
+
+  private static class Accumulator<K extends Enum<K>, V> {
+    private final BinaryOperator<V> mergeFunction;
+    private EnumMap<K, V> map = null;
+
+    Accumulator(BinaryOperator<V> mergeFunction) {
+      this.mergeFunction = mergeFunction;
+    }
+
+    void put(K key, V value) {
+      if (map == null) {
+        map = new EnumMap<K, V>(key.getDeclaringClass());
+      }
+      map.merge(key, value, mergeFunction);
+    }
+
+    Accumulator<K, V> combine(Accumulator<K, V> other) {
+      if (this.map == null) {
+        return other;
+      } else if (other.map == null) {
+        return this;
+      } else {
+        other.map.forEach(this::put);
+        return this;
+      }
+    }
+
+    ImmutableMap<K, V> toImmutableMap() {
+      return (map == null) ? ImmutableMap.<K, V>of() : ImmutableEnumMap.asImmutable(map);
+    }
+  }
+
+  /**
+   * Returns a {@link Collector} that accumulates elements into an {@code ImmutableMap} whose keys
+   * and values are the result of applying the provided mapping functions to the input elements. The
+   * resulting implementation is specialized for enum key types. The returned map and its views will
+   * iterate over keys in their enum definition order, not encounter order.
+   *
+   * <p>If the mapped keys contain duplicates, an {@code IllegalArgumentException} is thrown when
+   * the collection operation is performed. (This differs from the {@code Collector} returned by
+   * {@link java.util.stream.Collectors#toMap(java.util.function.Function,
+   * java.util.function.Function) Collectors.toMap(Function, Function)}, which throws an
+   * {@code IllegalStateException}.)
+   *
+   * @since 21.0
+   */
+  @Beta
+  public static <T, K extends Enum<K>, V> Collector<T, ?, ImmutableMap<K, V>> toImmutableEnumMap(
+      java.util.function.Function<? super T, ? extends K> keyFunction,
+      java.util.function.Function<? super T, ? extends V> valueFunction) {
+    checkNotNull(keyFunction);
+    checkNotNull(valueFunction);
+    return Collector.of(
+        () ->
+            new Accumulator<K, V>(
+                (v1, v2) -> {
+                  throw new IllegalArgumentException("Multiple values for key: " + v1 + ", " + v2);
+                }),
+        (accum, t) -> {
+          K key = checkNotNull(keyFunction.apply(t), "Null key for input %s", t);
+          V newValue = checkNotNull(valueFunction.apply(t), "Null value for input %s", t);
+          accum.put(key, newValue);
+        },
+        Accumulator::combine,
+        Accumulator::toImmutableMap,
+        Collector.Characteristics.UNORDERED);
+  }
+
+  /**
+   * Returns a {@link Collector} that accumulates elements into an {@code ImmutableMap} whose keys
+   * and values are the result of applying the provided mapping functions to the input elements. The
+   * resulting implementation is specialized for enum key types. The returned map and its views will
+   * iterate over keys in their enum definition order, not encounter order.
+   *
+   * <p>If the mapped keys contain duplicates, the values are merged using the specified merging
+   * function.
+   *
+   * @since 21.0
+   */
+  @Beta
+  public static <T, K extends Enum<K>, V> Collector<T, ?, ImmutableMap<K, V>> toImmutableEnumMap(
+      java.util.function.Function<? super T, ? extends K> keyFunction,
+      java.util.function.Function<? super T, ? extends V> valueFunction,
+      BinaryOperator<V> mergeFunction) {
+    checkNotNull(keyFunction);
+    checkNotNull(valueFunction);
+    checkNotNull(mergeFunction);
+    // not UNORDERED because we don't know if mergeFunction is commutative
+    return Collector.of(
+        () -> new Accumulator<K, V>(mergeFunction),
+        (accum, t) -> {
+          K key = checkNotNull(keyFunction.apply(t), "Null key for input %s", t);
+          V newValue = checkNotNull(valueFunction.apply(t), "Null value for input %s", t);
+          accum.put(key, newValue);
+        },
+        Accumulator::combine,
+        Accumulator::toImmutableMap);
   }
 
   /**
@@ -292,22 +398,12 @@ public final class Maps {
   }
 
   /**
-   * Returns a general-purpose instance of {@code ConcurrentMap}, which supports
-   * all optional operations of the ConcurrentMap interface. It does not permit
-   * null keys or values. It is serializable.
+   * Creates a new empty {@link ConcurrentHashMap} instance.
    *
-   * <p>This is currently accomplished by calling {@link MapMaker#makeMap()}.
-   *
-   * <p>It is preferable to use {@code MapMaker} directly (rather than through
-   * this method), as it presents numerous useful configuration options,
-   * such as the concurrency level, load factor, key/value reference types,
-   * and value computation.
-   *
-   * @return a new, empty {@code ConcurrentMap}
    * @since 3.0
    */
   public static <K, V> ConcurrentMap<K, V> newConcurrentMap() {
-    return new MapMaker().<K, V>makeMap();
+    return new ConcurrentHashMap<>();
   }
 
   /**
@@ -446,9 +542,6 @@ public final class Maps {
    * Computes the difference between two maps. This difference is an immutable
    * snapshot of the state of the maps at the time this method is called. It
    * will never change, even if the maps change at a later time.
-   *
-   * <p>Values are compared using a provided equivalence, in the case of
-   * equality, the value on the 'left' is returned in the difference.
    *
    * <p>Since this method uses {@code HashMap} instances internally, the keys of
    * the supplied maps must be well-behaved with respect to
@@ -1233,8 +1326,8 @@ public final class Maps {
    *         keyFunction} on each value in the input collection to that value
    * @throws IllegalArgumentException if {@code keyFunction} produces the same
    *         key for more than one value in the input collection
-   * @throws NullPointerException if any elements of {@code values} is null, or
-   *         if {@code keyFunction} produces {@code null} for any value
+   * @throws NullPointerException if any element of {@code values} is {@code
+   *         null}, or if {@code keyFunction} produces {@code null} for any value
    */
   @CanIgnoreReturnValue
   public static <K, V> ImmutableMap<K, V> uniqueIndex(
@@ -1267,8 +1360,8 @@ public final class Maps {
    *         keyFunction} on each value in the input collection to that value
    * @throws IllegalArgumentException if {@code keyFunction} produces the same
    *         key for more than one value in the input collection
-   * @throws NullPointerException if any elements of {@code values} is null, or
-   *         if {@code keyFunction} produces {@code null} for any value
+   * @throws NullPointerException if any element of {@code values} is {@code
+   *         null}, or if {@code keyFunction} produces {@code null} for any value
    * @since 10.0
    */
   @CanIgnoreReturnValue
@@ -2767,26 +2860,43 @@ public final class Maps {
 
     @Override
     public boolean remove(Object o) {
-      return Iterables.removeFirstMatching(
-              unfiltered.entrySet(),
-              Predicates.<Entry<K, V>>and(predicate, Maps.<V>valuePredicateOnEntries(equalTo(o))))
-          != null;
-    }
-
-    private boolean removeIf(Predicate<? super V> valuePredicate) {
-      return Iterables.removeIf(
-          unfiltered.entrySet(),
-          Predicates.<Entry<K, V>>and(predicate, Maps.<V>valuePredicateOnEntries(valuePredicate)));
+      Iterator<Entry<K, V>> entryItr = unfiltered.entrySet().iterator();
+      while (entryItr.hasNext()) {
+        Entry<K, V> entry = entryItr.next();
+        if (predicate.apply(entry) && Objects.equal(entry.getValue(), o)) {
+          entryItr.remove();
+          return true;
+        }
+      }
+      return false;
     }
 
     @Override
     public boolean removeAll(Collection<?> collection) {
-      return removeIf(in(collection));
+      Iterator<Entry<K, V>> entryItr = unfiltered.entrySet().iterator();
+      boolean result = false;
+      while (entryItr.hasNext()) {
+        Entry<K, V> entry = entryItr.next();
+        if (predicate.apply(entry) && collection.contains(entry.getValue())) {
+          entryItr.remove();
+          result = true;
+        }
+      }
+      return result;
     }
 
     @Override
     public boolean retainAll(Collection<?> collection) {
-      return removeIf(not(in(collection)));
+      Iterator<Entry<K, V>> entryItr = unfiltered.entrySet().iterator();
+      boolean result = false;
+      while (entryItr.hasNext()) {
+        Entry<K, V> entry = entryItr.next();
+        if (predicate.apply(entry) && !collection.contains(entry.getValue())) {
+          entryItr.remove();
+          result = true;
+        }
+      }
+      return result;
     }
 
     @Override
@@ -2881,6 +2991,34 @@ public final class Maps {
     Set<K> createKeySet() {
       return new KeySet();
     }
+    
+    static <K, V> boolean removeAllKeys(
+        Map<K, V> map, Predicate<? super Entry<K, V>> entryPredicate, Collection<?> keyCollection) {
+      Iterator<Entry<K, V>> entryItr = map.entrySet().iterator();
+      boolean result = false;
+      while (entryItr.hasNext()) {
+        Entry<K, V> entry = entryItr.next();
+        if (entryPredicate.apply(entry) && keyCollection.contains(entry.getKey())) {
+          entryItr.remove();
+          result = true;
+        }
+      }
+      return result;
+    }
+    
+    static <K, V> boolean retainAllKeys(
+        Map<K, V> map, Predicate<? super Entry<K, V>> entryPredicate, Collection<?> keyCollection) {
+      Iterator<Entry<K, V>> entryItr = map.entrySet().iterator();
+      boolean result = false;
+      while (entryItr.hasNext()) {
+        Entry<K, V> entry = entryItr.next();
+        if (entryPredicate.apply(entry) && !keyCollection.contains(entry.getKey())) {
+          entryItr.remove();
+          result = true;
+        }
+      }
+      return result;
+    }
 
     @WeakOuter
     class KeySet extends Maps.KeySet<K, V> {
@@ -2897,20 +3035,14 @@ public final class Maps {
         return false;
       }
 
-      private boolean removeIf(Predicate<? super K> keyPredicate) {
-        return Iterables.removeIf(
-            unfiltered.entrySet(),
-            Predicates.<Entry<K, V>>and(predicate, Maps.<K>keyPredicateOnEntries(keyPredicate)));
+      @Override
+      public boolean removeAll(Collection<?> collection) {
+        return removeAllKeys(unfiltered, predicate, collection);
       }
 
       @Override
-      public boolean removeAll(Collection<?> c) {
-        return removeIf(in(c));
-      }
-
-      @Override
-      public boolean retainAll(Collection<?> c) {
-        return removeIf(not(in(c)));
+      public boolean retainAll(Collection<?> collection) {
+        return retainAllKeys(unfiltered, predicate, collection);
       }
 
       @Override
@@ -3071,18 +3203,13 @@ public final class Maps {
     public NavigableSet<K> navigableKeySet() {
       return new Maps.NavigableKeySet<K, V>(this) {
         @Override
-        public boolean removeAll(Collection<?> c) {
-          return Iterators.removeIf(
-              unfiltered.entrySet().iterator(),
-              Predicates.<Entry<K, V>>and(entryPredicate, Maps.<K>keyPredicateOnEntries(in(c))));
+        public boolean removeAll(Collection<?> collection) {
+          return FilteredEntryMap.removeAllKeys(unfiltered, entryPredicate, collection);
         }
 
         @Override
-        public boolean retainAll(Collection<?> c) {
-          return Iterators.removeIf(
-              unfiltered.entrySet().iterator(),
-              Predicates.<Entry<K, V>>and(
-                  entryPredicate, Maps.<K>keyPredicateOnEntries(not(in(c)))));
+        public boolean retainAll(Collection<?> collection) {
+          return FilteredEntryMap.retainAllKeys(unfiltered, entryPredicate, collection);
         }
       };
     }
@@ -3681,14 +3808,19 @@ public final class Maps {
     return false;
   }
 
-  static final MapJoiner STANDARD_JOINER = Collections2.STANDARD_JOINER.withKeyValueSeparator("=");
-
   /**
    * An implementation of {@link Map#toString}.
    */
   static String toStringImpl(Map<?, ?> map) {
     StringBuilder sb = Collections2.newStringBuilderForCollection(map.size()).append('{');
-    STANDARD_JOINER.appendTo(sb, map);
+    boolean first = true;
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      if (!first) {
+        sb.append(", ");
+      }
+      first = false;
+      sb.append(entry.getKey()).append('=').append(entry.getValue());
+    }
     return sb.append('}').toString();
   }
 

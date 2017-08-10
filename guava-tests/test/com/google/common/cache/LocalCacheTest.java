@@ -81,6 +81,7 @@ import junit.framework.TestSuite;
 /**
  * @author Charles Fry
  */
+@SuppressWarnings("GuardedBy") // TODO(b/35466881): Fix or suppress.
 public class LocalCacheTest extends TestCase {
   private static class TestStringCacheGenerator extends TestStringMapGenerator {
     private final CacheBuilder<? super String, ? super String> builder;
@@ -222,7 +223,7 @@ public class LocalCacheTest extends TestCase {
   }
 
   private static CacheBuilder<Object, Object> createCacheBuilder() {
-    return new CacheBuilder<Object, Object>();
+    return CacheBuilder.newBuilder();
   }
 
   // constructor tests
@@ -661,7 +662,7 @@ public class LocalCacheTest extends TestCase {
     map.put("foo", "bar");
     map.put("baz", "bar");
     map.put("quux", "quux");
-    assertThat(map.values()).isNotInstanceOf(Set.class);
+    assertFalse(map.values() instanceof Set);
     assertTrue(map.values().removeAll(ImmutableSet.of("bar")));
     assertEquals(1, map.size());
   }
@@ -1356,7 +1357,7 @@ public class LocalCacheTest extends TestCase {
     int index = hash & (table.length() - 1);
 
     DummyEntry<Object, Object> entry = DummyEntry.create(key, hash, null);
-    LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<Object, Object>();
+    LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<>();
     entry.setValueReference(valueRef);
 
     // absent
@@ -1947,7 +1948,7 @@ public class LocalCacheTest extends TestCase {
     Object key = new Object();
     int hash = map.hash(key);
     DummyEntry<Object, Object> entry = DummyEntry.create(key, hash, null);
-    LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<Object, Object>();
+    LoadingValueReference<Object, Object> valueRef = new LoadingValueReference<>();
     entry.setValueReference(valueRef);
 
     // absent
@@ -2512,8 +2513,8 @@ public class LocalCacheTest extends TestCase {
 
   public void testSerializationProxyLoading() {
     CacheLoader<Object, Object> loader = new SerializableCacheLoader();
-    RemovalListener<Object, Object> listener = new SerializableRemovalListener<Object, Object>();
-    SerializableWeigher<Object, Object> weigher = new SerializableWeigher<Object, Object>();
+    RemovalListener<Object, Object> listener = new SerializableRemovalListener<>();
+    SerializableWeigher<Object, Object> weigher = new SerializableWeigher<>();
     Ticker ticker = new SerializableTicker();
     @SuppressWarnings("unchecked") // createMock
     LocalLoadingCache<Object, Object> one = (LocalLoadingCache) CacheBuilder.newBuilder()
@@ -2568,8 +2569,8 @@ public class LocalCacheTest extends TestCase {
   }
 
   public void testSerializationProxyManual() {
-    RemovalListener<Object, Object> listener = new SerializableRemovalListener<Object, Object>();
-    SerializableWeigher<Object, Object> weigher = new SerializableWeigher<Object, Object>();
+    RemovalListener<Object, Object> listener = new SerializableRemovalListener<>();
+    SerializableWeigher<Object, Object> weigher = new SerializableWeigher<>();
     Ticker ticker = new SerializableTicker();
     @SuppressWarnings("unchecked") // createMock
     LocalManualCache<Object, Object> one = (LocalManualCache) CacheBuilder.newBuilder()

@@ -26,6 +26,7 @@ import com.google.common.annotations.GwtIncompatible;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.Collection;
 import java.util.Comparator;
@@ -74,7 +75,7 @@ public final class Iterables {
       Iterable<T> result = (Iterable<T>) iterable;
       return result;
     }
-    return new UnmodifiableIterable<T>(iterable);
+    return new UnmodifiableIterable<>(iterable);
   }
 
   /**
@@ -128,8 +129,10 @@ public final class Iterables {
   }
 
   /**
-   * Returns {@code true} if {@code iterable} contains any object for which {@code equals(element)}
-   * is true.
+   * Returns {@code true} if {@code iterable} contains any element {@code o} for which {@code
+   * Objects.equals(o, element)} would return {@code true}. Otherwise returns {@code false}, even in
+   * cases where {@link Collection#contains} might throw {@link NullPointerException} or {@link
+   * ClassCastException}.
    */
   public static boolean contains(Iterable<?> iterable, @Nullable Object element) {
     if (iterable instanceof Collection) {
@@ -340,7 +343,8 @@ public final class Iterables {
    * stream.filter(element::equals).count()}. If {@code element} might be null, use {@code
    * stream.filter(Predicate.isEqual(element)).count()} instead.
    *
-   * @see Collections#frequency
+   * @see java.util.Collections#frequency(Collection, Object) Collections.frequency(Collection,
+   *      Object)
    */
   public static int frequency(Iterable<?> iterable, @Nullable Object element) {
     if ((iterable instanceof Multiset)) {
@@ -409,6 +413,7 @@ public final class Iterables {
    * this method is {@code Stream.generate(() -> e)}. Otherwise, put the elements in a collection
    * and use {@code Stream.generate(() -> collection).flatMap(Collection::stream)}.
    */
+  @SafeVarargs
   public static <T> Iterable<T> cycle(T... elements) {
     return cycle(Lists.newArrayList(elements));
   }
@@ -477,8 +482,9 @@ public final class Iterables {
    *
    * @throws NullPointerException if any of the provided iterables is null
    */
+  @SafeVarargs
   public static <T> Iterable<T> concat(Iterable<? extends T>... inputs) {
-    return concat(ImmutableList.copyOf(inputs));
+    return FluentIterable.concat(inputs);
   }
 
   /**
@@ -560,7 +566,7 @@ public final class Iterables {
    * Returns a view of {@code unfiltered} containing all elements that satisfy the input predicate
    * {@code retainIfTrue}. The returned iterable's iterator does not support {@code remove()}.
    *
-   * <p><b>{@code Stream} equivalent:</b> {@code stream.filter()}.
+   * <p><b>{@code Stream} equivalent:</b> {@link Stream#filter}.
    */
   public static <T> Iterable<T> filter(
       final Iterable<T> unfiltered, final Predicate<? super T> retainIfTrue) {
@@ -604,35 +610,12 @@ public final class Iterables {
    *     (ImmutableList) stream.filter(NewType.class::isInstance).collect(toImmutableList());}
    * </pre>
    */
+  @SuppressWarnings("unchecked")
   @GwtIncompatible // Class.isInstance
   public static <T> Iterable<T> filter(final Iterable<?> unfiltered, final Class<T> desiredType) {
     checkNotNull(unfiltered);
     checkNotNull(desiredType);
-    return new FluentIterable<T>() {
-      @Override
-      public Iterator<T> iterator() {
-        return Iterators.filter(unfiltered.iterator(), desiredType);
-      }
-
-      @SuppressWarnings("unchecked")
-      @Override
-      public void forEach(Consumer<? super T> action) {
-        checkNotNull(action);
-        unfiltered.forEach(
-            (Object o) -> {
-              if (desiredType.isInstance(o)) {
-                action.accept(desiredType.cast(o));
-              }
-            });
-      }
-
-      @SuppressWarnings("unchecked")
-      @Override
-      public Spliterator<T> spliterator() {
-        return (Spliterator<T>)
-            CollectSpliterators.filter(unfiltered.spliterator(), desiredType::isInstance);
-      }
-    };
+    return (Iterable<T>) filter(unfiltered, Predicates.instanceOf(desiredType));
   }
 
   /**
@@ -660,6 +643,8 @@ public final class Iterables {
    * it is possible that <i>no</i> element will match, use {@link #tryFind} or
    * {@link #find(Iterable, Predicate, Object)} instead.
    *
+   * <p><b>{@code Stream} equivalent:</b> {@code stream.filter(predicate).findFirst().get()}
+   *
    * @throws NoSuchElementException if no element in {@code iterable} matches
    *     the given predicate
    */
@@ -672,6 +657,9 @@ public final class Iterables {
    * predicate, or {@code defaultValue} if none found. Note that this can
    * usually be handled more naturally using {@code
    * tryFind(iterable, predicate).or(defaultValue)}.
+   *
+   * <p><b>{@code Stream} equivalent:</b>
+   * {@code stream.filter(predicate).findFirst().orElse(defaultValue)}
    *
    * @since 7.0
    */
@@ -688,6 +676,9 @@ public final class Iterables {
    * <p><b>Warning:</b> avoid using a {@code predicate} that matches {@code
    * null}. If {@code null} is matched in {@code iterable}, a
    * NullPointerException will be thrown.
+   *
+   * <p><b>{@code Stream} equivalent:</b>
+   * {@code stream.filter(predicate).findFirst()}
    *
    * @since 11.0
    */
@@ -721,6 +712,8 @@ public final class Iterables {
    * <p>If the input {@code Iterable} is known to be a {@code List} or other
    * {@code Collection}, consider {@link Lists#transform} and {@link
    * Collections2#transform}.
+   *
+   * <p><b>{@code Stream} equivalent:</b> {@link Stream#map}
    */
   public static <F, T> Iterable<T> transform(
       final Iterable<F> fromIterable, final Function<? super F, ? extends T> function) {
@@ -748,6 +741,9 @@ public final class Iterables {
   /**
    * Returns the element at the specified position in an iterable.
    *
+   * <p><b>{@code Stream} equivalent:</b> {@code stream.skip(position).findFirst().get()}
+   * (throws {@code NoSuchElementException} if out of bounds)
+   *
    * @param position position of the element to return
    * @return the element at the specified position in {@code iterable}
    * @throws IndexOutOfBoundsException if {@code position} is negative or
@@ -763,6 +759,10 @@ public final class Iterables {
   /**
    * Returns the element at the specified position in an iterable or a default
    * value otherwise.
+   *
+   * <p><b>{@code Stream} equivalent:</b>
+   * {@code stream.skip(position).findFirst().orElse(defaultValue)}
+   * (returns the default value if the index is out of bounds)
    *
    * @param position position of the element to return
    * @param defaultValue the default value to return if {@code position} is
@@ -798,6 +798,8 @@ public final class Iterables {
    * <p>To get the only element in a single-element {@code Iterable}, consider using {@link
    * #getOnlyElement(Iterable)} or {@link #getOnlyElement(Iterable, Object)} instead.
    *
+   * <p><b>{@code Stream} equivalent:</b> {@code stream.findFirst().orElse(defaultValue)}
+   *
    * @param defaultValue the default value to return if the iterable is empty
    * @return the first element of {@code iterable} or the default value
    * @since 7.0
@@ -810,6 +812,8 @@ public final class Iterables {
   /**
    * Returns the last element of {@code iterable}. If {@code iterable} is a {@link List} with
    * {@link RandomAccess} support, then this operation is guaranteed to be {@code O(1)}.
+   *
+   * <p><b>{@code Stream} equivalent:</b> {@link Streams#findLast Streams.findLast(stream).get()}
    *
    * @return the last element of {@code iterable}
    * @throws NoSuchElementException if the iterable is empty
@@ -831,6 +835,8 @@ public final class Iterables {
    * Returns the last element of {@code iterable} or {@code defaultValue} if
    * the iterable is empty. If {@code iterable} is a {@link List} with
    * {@link RandomAccess} support, then this operation is guaranteed to be {@code O(1)}.
+   *
+   * <p><b>{@code Stream} equivalent:</b> {@code Streams.findLast(stream).orElse(defaultValue)}
    *
    * @param defaultValue the value to return if {@code iterable} is empty
    * @return the last element of {@code iterable} or the default value
@@ -872,27 +878,22 @@ public final class Iterables {
    * contract states that a call to {@code remove()} before a call to
    * {@code next()} will throw an {@link IllegalStateException}.
    *
+   * <p><b>{@code Stream} equivalent:</b> {@link Stream#skip}
+   *
    * @since 3.0
    */
   public static <T> Iterable<T> skip(final Iterable<T> iterable, final int numberToSkip) {
     checkNotNull(iterable);
     checkArgument(numberToSkip >= 0, "number to skip cannot be negative");
 
-    if (iterable instanceof List) {
-      final List<T> list = (List<T>) iterable;
-      return new FluentIterable<T>() {
-        @Override
-        public Iterator<T> iterator() {
-          // TODO(kevinb): Support a concurrently modified collection?
-          int toSkip = Math.min(list.size(), numberToSkip);
-          return list.subList(toSkip, list.size()).iterator();
-        }
-      };
-    }
-
     return new FluentIterable<T>() {
       @Override
       public Iterator<T> iterator() {
+        if (iterable instanceof List) {
+          final List<T> list = (List<T>) iterable;
+          int toSkip = Math.min(list.size(), numberToSkip);
+          return list.subList(toSkip, list.size()).iterator();
+        }
         final Iterator<T> iterator = iterable.iterator();
 
         Iterators.advance(iterator, numberToSkip);
@@ -927,7 +928,13 @@ public final class Iterables {
 
       @Override
       public Spliterator<T> spliterator() {
-        return Streams.stream(iterable).skip(numberToSkip).spliterator();
+        if (iterable instanceof List) {
+          final List<T> list = (List<T>) iterable;
+          int toSkip = Math.min(list.size(), numberToSkip);
+          return list.subList(toSkip, list.size()).spliterator();
+        } else {
+          return Streams.stream(iterable).skip(numberToSkip).spliterator();
+        }
       }
     };
   }
@@ -938,6 +945,8 @@ public final class Iterables {
    * elements, the returned view contains all of its elements. The returned
    * iterable's iterator supports {@code remove()} if {@code iterable}'s
    * iterator does.
+   *
+   * <p><b>{@code Stream} equivalent:</b> {@link Stream#limit}
    *
    * @param iterable the iterable to limit
    * @param limitSize the maximum number of elements in the returned iterable
@@ -980,26 +989,14 @@ public final class Iterables {
    * @since 2.0
    */
   public static <T> Iterable<T> consumingIterable(final Iterable<T> iterable) {
-    if (iterable instanceof Queue) {
-      return new FluentIterable<T>() {
-        @Override
-        public Iterator<T> iterator() {
-          return new ConsumingQueueIterator<T>((Queue<T>) iterable);
-        }
-
-        @Override
-        public String toString() {
-          return "Iterables.consumingIterable(...)";
-        }
-      };
-    }
-
     checkNotNull(iterable);
 
     return new FluentIterable<T>() {
       @Override
       public Iterator<T> iterator() {
-        return Iterators.consumingIterator(iterable.iterator());
+        return (iterable instanceof Queue)
+            ? new ConsumingQueueIterator<>((Queue<T>) iterable)
+            : Iterators.consumingIterator(iterable.iterator());
       }
 
       @Override
@@ -1017,6 +1014,8 @@ public final class Iterables {
    * <p>There is no precise {@link Iterator} equivalent to this method, since
    * one can only ask an iterator whether it has any elements <i>remaining</i>
    * (which one does using {@link Iterator#hasNext}).
+   *
+   * <p><b>{@code Stream} equivalent:</b> {@code !stream.findAny().isPresent()}
    *
    * @return {@code true} if the iterable contains no elements
    */
@@ -1053,7 +1052,7 @@ public final class Iterables {
                 Iterables.transform(iterables, Iterables.<T>toIterator()), comparator);
           }
         };
-    return new UnmodifiableIterable<T>(iterable);
+    return new UnmodifiableIterable<>(iterable);
   }
 
   // TODO(user): Is this the best place for this? Move to fluent functions?

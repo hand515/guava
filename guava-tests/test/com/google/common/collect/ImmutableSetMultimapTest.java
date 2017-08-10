@@ -1,3 +1,4 @@
+
 /*
  * Copyright (C) 2009 The Guava Authors
  *
@@ -102,7 +103,7 @@ public class ImmutableSetMultimapTest extends TestCase {
   }
 
   public void testBuilder_withImmutableEntryAndNullContents() {
-    Builder<String, Integer> builder = new Builder<String, Integer>();
+    Builder<String, Integer> builder = new Builder<>();
     try {
       builder.put(Maps.immutableEntry("one", (Integer) null));
       fail();
@@ -277,9 +278,9 @@ public class ImmutableSetMultimapTest extends TestCase {
     assertThat(multimap.values()).containsExactly(2, 4, 3, 6, 5, 2).inOrder();
     assertThat(multimap.get("a")).containsExactly(5, 2).inOrder();
     assertThat(multimap.get("b")).containsExactly(3, 6).inOrder();
-    assertThat(multimap.get("a")).isNotInstanceOf(ImmutableSortedSet.class);
-    assertThat(multimap.get("x")).isNotInstanceOf(ImmutableSortedSet.class);
-    assertThat(multimap.asMap().get("a")).isNotInstanceOf(ImmutableSortedSet.class);
+    assertFalse(multimap.get("a") instanceof ImmutableSortedSet);
+    assertFalse(multimap.get("x") instanceof ImmutableSortedSet);
+    assertFalse(multimap.asMap().get("a") instanceof ImmutableSortedSet);
   }
 
   public void testBuilderOrderKeysByDuplicates() {
@@ -302,9 +303,9 @@ public class ImmutableSetMultimapTest extends TestCase {
     assertThat(multimap.values()).containsExactly(2, 5, 2, 3, 6, 4).inOrder();
     assertThat(multimap.get("a")).containsExactly(5, 2).inOrder();
     assertThat(multimap.get("bb")).containsExactly(3, 6).inOrder();
-    assertThat(multimap.get("a")).isNotInstanceOf(ImmutableSortedSet.class);
-    assertThat(multimap.get("x")).isNotInstanceOf(ImmutableSortedSet.class);
-    assertThat(multimap.asMap().get("a")).isNotInstanceOf(ImmutableSortedSet.class);
+    assertFalse(multimap.get("a") instanceof ImmutableSortedSet);
+    assertFalse(multimap.get("x") instanceof ImmutableSortedSet);
+    assertFalse(multimap.asMap().get("a") instanceof ImmutableSortedSet);
   }
 
   public void testBuilderOrderValuesBy() {
@@ -428,6 +429,28 @@ public class ImmutableSetMultimapTest extends TestCase {
             mapEntry("b", 2),
             mapEntry("a", 3),
             mapEntry("c", 4));
+  }
+
+  public void testFlatteningToImmutableSetMultimap() {
+    Collector<String, ?, ImmutableSetMultimap<Character, Character>> collector =
+        ImmutableSetMultimap.flatteningToImmutableSetMultimap(
+            str -> str.charAt(0), str -> str.substring(1).chars().mapToObj(c -> (char) c));
+    BiPredicate<Multimap<?, ?>, Multimap<?, ?>> equivalence =
+        Equivalence.equals()
+            .onResultOf((Multimap<?, ?> mm) -> ImmutableList.copyOf(mm.asMap().entrySet()))
+            .and(Equivalence.equals());
+    ImmutableSetMultimap<Character, Character> empty = ImmutableSetMultimap.of();
+    ImmutableSetMultimap<Character, Character> filled =
+        ImmutableSetMultimap.<Character, Character>builder()
+            .putAll('b', Arrays.asList('a', 'n', 'a', 'n', 'a'))
+            .putAll('a', Arrays.asList('p', 'p', 'l', 'e'))
+            .putAll('c', Arrays.asList('a', 'r', 'r', 'o', 't'))
+            .putAll('a', Arrays.asList('s', 'p', 'a', 'r', 'a', 'g', 'u', 's'))
+            .putAll('c', Arrays.asList('h', 'e', 'r', 'r', 'y'))
+            .build();
+    CollectorTester.of(collector, equivalence)
+        .expectCollects(empty)
+        .expectCollects(filled, "banana", "apple", "carrot", "asparagus", "cherry");
   }
 
   public void testEmptyMultimapReads() {

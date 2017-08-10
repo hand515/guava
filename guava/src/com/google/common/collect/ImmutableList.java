@@ -19,7 +19,6 @@ package com.google.common.collect;
 import static com.google.common.base.Preconditions.checkElementIndex;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkPositionIndexes;
-import static com.google.common.collect.ObjectArrays.arraysCopyOf;
 import static com.google.common.collect.ObjectArrays.checkElementsNotNull;
 import static com.google.common.collect.RegularImmutableList.EMPTY;
 
@@ -285,11 +284,11 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
   public static <E> ImmutableList<E> copyOf(E[] elements) {
     switch (elements.length) {
       case 0:
-        return ImmutableList.of();
+        return of();
       case 1:
-        return new SingletonImmutableList<E>(elements[0]);
+        return of(elements[0]);
       default:
-        return new RegularImmutableList<E>(checkElementsNotNull(elements.clone()));
+        return construct(elements.clone());
     }
   }
 
@@ -310,8 +309,8 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
    */
   public static <E extends Comparable<? super E>> ImmutableList<E> sortedCopyOf(
       Iterable<? extends E> elements) {
-    Comparable[] array = Iterables.toArray(elements, new Comparable[0]);
-    checkElementsNotNull(array);
+    Comparable<?>[] array = Iterables.toArray(elements, new Comparable<?>[0]);
+    checkElementsNotNull((Object[]) array);
     Arrays.sort(array);
     return asImmutableList(array);
   }
@@ -366,12 +365,10 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
       case 0:
         return of();
       case 1:
-        @SuppressWarnings("unchecked") // collection had only Es in it
-        ImmutableList<E> list = new SingletonImmutableList<E>((E) elements[0]);
-        return list;
+        return of((E) elements[0]);
       default:
         if (length < elements.length) {
-          elements = arraysCopyOf(elements, length);
+          elements = Arrays.copyOf(elements, length);
         }
         return new RegularImmutableList<E>(elements);
     }
@@ -439,14 +436,12 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
     int length = toIndex - fromIndex;
     if (length == size()) {
       return this;
-    }
-    switch (length) {
-      case 0:
-        return of();
-      case 1:
-        return of(get(fromIndex));
-      default:
-        return subListUnchecked(fromIndex, toIndex);
+    } else if (length == 0) {
+      return of();
+    } else if (length == 1) {
+      return of(get(fromIndex));
+    } else {
+      return subListUnchecked(fromIndex, toIndex);
     }
   }
 
@@ -725,6 +720,9 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
    *           .addAll(WEBSAFE_COLORS)
    *           .add(new Color(0, 191, 255))
    *           .build();}</pre>
+   *
+   * <p>Elements appear in the resulting list in the same order they were added
+   * to the builder.
    *
    * <p>Builder instances can be reused; it is safe to call {@link #build} multiple
    * times to build multiple lists in series. Each new list contains all the

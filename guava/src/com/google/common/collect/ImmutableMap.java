@@ -26,6 +26,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.concurrent.LazyInit;
 import com.google.j2objc.annotations.WeakOuter;
 import java.io.Serializable;
+import java.util.AbstractMap;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.SortedMap;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.BiFunction;
@@ -77,7 +79,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
       Function<? super T, ? extends V> valueFunction) {
     return CollectCollectors.toImmutableMap(keyFunction, valueFunction);
   }
-  
+
   /**
    * Returns a {@link Collector} that accumulates elements into an {@code ImmutableMap} whose keys
    * and values are the result of applying the provided mapping functions to the input elements.
@@ -106,8 +108,9 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
    * {@link Collections#emptyMap}, and is preferable mainly for consistency
    * and maintainability of your code.
    */
+  @SuppressWarnings("unchecked")
   public static <K, V> ImmutableMap<K, V> of() {
-    return ImmutableBiMap.of();
+    return (ImmutableMap<K, V>) RegularImmutableMap.EMPTY;
   }
 
   /**
@@ -162,14 +165,15 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
   // looking for of() with > 5 entries? Use the builder instead.
 
   /**
-   * Verifies that {@code key} and {@code value} are non-null, and returns a new
-   * immutable entry with those values.
+   * Verifies that {@code key} and {@code value} are non-null, and returns a new immutable entry
+   * with those values.
    *
-   * <p>A call to {@link Map.Entry#setValue} on the returned entry will always
-   * throw {@link UnsupportedOperationException}.
+   * <p>A call to {@link Map.Entry#setValue} on the returned entry will always throw {@link
+   * UnsupportedOperationException}.
    */
-  static <K, V> ImmutableMapEntry<K, V> entryOf(K key, V value) {
-    return new ImmutableMapEntry<K, V>(key, value);
+  static <K, V> Entry<K, V> entryOf(K key, V value) {
+    checkEntryNotNull(key, value);
+    return new AbstractMap.SimpleImmutableEntry<K, V>(key, value);
   }
 
   /**
@@ -189,8 +193,8 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
   }
 
   /**
-   * A builder for creating immutable map instances, especially {@code public
-   * static final} maps ("constant maps"). Example: <pre>   {@code
+   * A builder for creating immutable map instances, especially {@code public static final} maps
+   * ("constant maps"). Example: <pre>   {@code
    *
    *   static final ImmutableMap<String, Integer> WORD_TO_INT =
    *       new ImmutableMap.Builder<String, Integer>()
@@ -199,8 +203,16 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
    *           .put("three", 3)
    *           .build();}</pre>
    *
-   * <p>For <i>small</i> immutable maps, the {@code ImmutableMap.of()} methods are
-   * even more convenient.
+   * <p>For <i>small</i> immutable maps, the {@code ImmutableMap.of()} methods are even more
+   * convenient.
+   *
+   * <p>By default, a {@code Builder} will generate maps that iterate over entries in the order
+   * they were inserted into the builder, equivalently to {@code LinkedHashMap}.  For example, in
+   * the above example, {@code WORD_TO_INT.entrySet()} is guaranteed to iterate over the entries in
+   * the order {@code "one"=1, "two"=2, "three"=3}, and {@code keySet()} and {@code values()}
+   * respect the same order.   If you want a different order, consider using 
+   * {@link ImmutableSortedMap} to sort by keys, or call {@link #orderEntriesByValue(Comparator)}, 
+   * which changes this builder to sort entries by value.
    *
    * <p>Builder instances can be reused - it is safe to call {@link #build}
    * multiple times to build multiple maps in series. Each map is a superset of
@@ -210,7 +222,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
    */
   public static class Builder<K, V> {
     Comparator<? super V> valueComparator;
-    ImmutableMapEntry<K, V>[] entries;
+    Entry<K, V>[] entries;
     int size;
     boolean entriesUsed;
 
@@ -224,7 +236,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
 
     @SuppressWarnings("unchecked")
     Builder(int initialCapacity) {
-      this.entries = new ImmutableMapEntry[initialCapacity];
+      this.entries = new Entry[initialCapacity];
       this.size = 0;
       this.entriesUsed = false;
     }
@@ -232,7 +244,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     private void ensureCapacity(int minCapacity) {
       if (minCapacity > entries.length) {
         entries =
-            ObjectArrays.arraysCopyOf(
+            Arrays.copyOf(
                 entries, ImmutableCollection.Builder.expandedCapacity(entries.length, minCapacity));
         entriesUsed = false;
       }
@@ -245,7 +257,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     @CanIgnoreReturnValue
     public Builder<K, V> put(K key, V value) {
       ensureCapacity(size + 1);
-      ImmutableMapEntry<K, V> entry = entryOf(key, value);
+      Entry<K, V> entry = entryOf(key, value);
       // don't inline this: we want to fail atomically if key or value is null
       entries[size++] = entry;
       return this;
@@ -327,45 +339,48 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
      */
 
     /**
-     * Returns a newly-created immutable map.
+     * Returns a newly-created immutable map.  The iteration order of the returned map is
+     * the order in which entries were inserted into the builder, unless
+     * {@link #orderEntriesByValue} was called, in which case entries are sorted by value.
      *
      * @throws IllegalArgumentException if duplicate keys were added
      */
     public ImmutableMap<K, V> build() {
+      /*
+       * If entries is full, then this implementation may end up using the entries array
+       * directly and writing over the entry objects with non-terminal entries, but this is
+       * safe; if this Builder is used further, it will grow the entries array (so it can't
+       * affect the original array), and future build() calls will always copy any entry
+       * objects that cannot be safely reused.
+       */
+      if (valueComparator != null) {
+        if (entriesUsed) {
+          entries = Arrays.copyOf(entries, size);
+        }
+        Arrays.sort(
+            entries,
+            0,
+            size,
+            Ordering.from(valueComparator).onResultOf(Maps.<V>valueFunction()));
+      }
+      entriesUsed = size == entries.length;
       switch (size) {
         case 0:
           return of();
         case 1:
           return of(entries[0].getKey(), entries[0].getValue());
         default:
-          /*
-           * If entries is full, then this implementation may end up using the entries array
-           * directly and writing over the entry objects with non-terminal entries, but this is
-           * safe; if this Builder is used further, it will grow the entries array (so it can't
-           * affect the original array), and future build() calls will always copy any entry
-           * objects that cannot be safely reused.
-           */
-          if (valueComparator != null) {
-            if (entriesUsed) {
-              entries = ObjectArrays.arraysCopyOf(entries, size);
-            }
-            Arrays.sort(
-                entries,
-                0,
-                size,
-                Ordering.from(valueComparator).onResultOf(Maps.<V>valueFunction()));
-          }
-          entriesUsed = size == entries.length;
           return RegularImmutableMap.fromEntryArray(size, entries);
       }
     }
   }
 
   /**
-   * Returns an immutable map containing the same entries as {@code map}. If
-   * {@code map} somehow contains entries with duplicate keys (for example, if
-   * it is a {@code SortedMap} whose comparator is not <i>consistent with
-   * equals</i>), the results of this method are undefined.
+   * Returns an immutable map containing the same entries as {@code map}. The returned map iterates
+   * over entries in the same order as the {@code entrySet} of the original map.  If {@code map}
+   * somehow contains entries with duplicate keys (for example, if it is a {@code SortedMap}
+   * whose comparator is not <i>consistent with equals</i>), the results of this method are
+   * undefined.
    *
    * <p>Despite the method name, this method attempts to avoid actually copying
    * the data when it is safe to do so. The exact circumstances under which a
@@ -374,10 +389,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
    * @throws NullPointerException if any key or value in {@code map} is null
    */
   public static <K, V> ImmutableMap<K, V> copyOf(Map<? extends K, ? extends V> map) {
-    if ((map instanceof ImmutableMap) && !(map instanceof ImmutableSortedMap)) {
-      // TODO(lowasser): Make ImmutableMap.copyOf(immutableBiMap) call copyOf()
-      // on the ImmutableMap delegate(), rather than the bimap itself
-
+    if ((map instanceof ImmutableMap) && !(map instanceof SortedMap)) {
       @SuppressWarnings("unchecked") // safe since map is not writable
       ImmutableMap<K, V> kvMap = (ImmutableMap<K, V>) map;
       if (!kvMap.isPartialView()) {
@@ -421,7 +433,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
 
   private static <K extends Enum<K>, V> ImmutableMap<K, V> copyOfEnumMap(
       EnumMap<K, ? extends V> original) {
-    EnumMap<K, V> copy = new EnumMap<K, V>(original);
+    EnumMap<K, V> copy = new EnumMap<>(original);
     for (Map.Entry<?, ?> entry : copy.entrySet()) {
       checkEntryNotNull(entry.getKey(), entry.getValue());
     }
@@ -441,6 +453,11 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     }
 
     @Override
+    ImmutableSet<K> createKeySet() {
+      return new ImmutableMapKeySet<>(this);
+    }
+
+    @Override
     ImmutableSet<Entry<K, V>> createEntrySet() {
       @WeakOuter
       class EntrySetImpl extends ImmutableMapEntrySet<K, V> {
@@ -455,6 +472,11 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
         }
       }
       return new EntrySetImpl();
+    }
+
+    @Override
+    ImmutableCollection<V> createValues() {
+      return new ImmutableMapValues<>(this);
     }
   }
 
@@ -649,8 +671,8 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
   private transient ImmutableSet<Entry<K, V>> entrySet;
 
   /**
-   * Returns an immutable set of the mappings in this map. The entries are in
-   * the same order as the parameters used to build this map.
+   * Returns an immutable set of the mappings in this map.  The iteration order is specified by
+   * the method used to create this map.  Typically, this is insertion order.
    */
   @Override
   public ImmutableSet<Entry<K, V>> entrySet() {
@@ -664,8 +686,8 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
   private transient ImmutableSet<K> keySet;
 
   /**
-   * Returns an immutable set of the keys in this map. These keys are in
-   * the same order as the parameters used to build this map.
+   * Returns an immutable set of the keys in this map, in the same order that they appear in
+   * {@link #entrySet}.
    */
   @Override
   public ImmutableSet<K> keySet() {
@@ -673,9 +695,12 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     return (result == null) ? keySet = createKeySet() : result;
   }
 
-  ImmutableSet<K> createKeySet() {
-    return isEmpty() ? ImmutableSet.<K>of() : new ImmutableMapKeySet<K, V>(this);
-  }
+  /*
+   * This could have a good default implementation of return new ImmutableKeySet<K, V>(this),
+   * but ProGuard can't figure out how to eliminate that default when RegularImmutableMap
+   * overrides it.
+   */
+  abstract ImmutableSet<K> createKeySet();
 
   UnmodifiableIterator<K> keyIterator() {
     final UnmodifiableIterator<Entry<K, V>> entryIterator = entrySet().iterator();
@@ -700,8 +725,8 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
   private transient ImmutableCollection<V> values;
 
   /**
-   * Returns an immutable collection of the values in this map. The values are
-   * in the same order as the parameters used to build this map.
+   * Returns an immutable collection of the values in this map, in the same order that they appear
+   * in {@link #entrySet}.
    */
   @Override
   public ImmutableCollection<V> values() {
@@ -709,9 +734,12 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     return (result == null) ? values = createValues() : result;
   }
 
-  ImmutableCollection<V> createValues() {
-    return new ImmutableMapValues<K, V>(this);
-  }
+  /*
+   * This could have a good default implementation of {@code return new
+   * ImmutableMapValues<K, V>(this)}, but ProGuard can't figure out how to eliminate that default
+   * when RegularImmutableMap overrides it.
+   */
+  abstract ImmutableCollection<V> createValues();
 
   // cached so that this.multimapView().inverse() only computes inverse once
   @LazyInit
@@ -729,7 +757,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     ImmutableSetMultimap<K, V> result = multimapView;
     return (result == null)
         ? (multimapView =
-            new ImmutableSetMultimap<K, V>(new MapViewOfValuesAsSingletonSets(), size(), null))
+            new ImmutableSetMultimap<>(new MapViewOfValuesAsSingletonSets(), size(), null))
         : result;
   }
 
@@ -743,7 +771,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     }
 
     @Override
-    public ImmutableSet<K> keySet() {
+    ImmutableSet<K> createKeySet() {
       return ImmutableMap.this.keySet();
     }
 
@@ -844,7 +872,7 @@ public abstract class ImmutableMap<K, V> implements Map<K, V>, Serializable {
     }
 
     Object readResolve() {
-      Builder<Object, Object> builder = new Builder<Object, Object>(keys.length);
+      Builder<Object, Object> builder = new Builder<>(keys.length);
       return createMap(builder);
     }
 

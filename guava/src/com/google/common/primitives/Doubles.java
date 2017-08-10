@@ -33,6 +33,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.regex.Pattern;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
@@ -103,7 +105,7 @@ public final class Doubles {
    * @since 10.0
    */
   public static boolean isFinite(double value) {
-    return NEGATIVE_INFINITY < value & value < POSITIVE_INFINITY;
+    return NEGATIVE_INFINITY < value && value < POSITIVE_INFINITY;
   }
 
   /**
@@ -236,6 +238,25 @@ public final class Doubles {
       max = Math.max(max, array[i]);
     }
     return max;
+  }
+
+  /**
+   * Returns the value nearest to {@code value} which is within the closed range {@code [min..max]}.
+   *
+   * <p>If {@code value} is within the range {@code [min..max]}, {@code value} is returned
+   * unchanged. If {@code value} is less than {@code min}, {@code min} is returned, and if
+   * {@code value} is greater than {@code max}, {@code max} is returned.
+   *
+   * @param value the {@code double} value to constrain
+   * @param min the lower bound (inclusive) of the range to constrain {@code value} to
+   * @param max the upper bound (inclusive) of the range to constrain {@code value} to
+   * @throws IllegalArgumentException if {@code min > max}
+   * @since 21.0
+   */
+  @Beta
+  public static double constrainToRange(double value, double min, double max) {
+    checkArgument(min <= max, "min (%s) must be less than or equal to max (%s)", min, max);
+    return Math.min(Math.max(value, min), max);
   }
 
   /**
@@ -410,16 +431,19 @@ public final class Doubles {
   }
 
   /**
-   * Returns a fixed-size list backed by the specified array, similar to
-   * {@link Arrays#asList(Object[])}. The list supports {@link List#set(int, Object)}, but any
-   * attempt to set a value to {@code null} will result in a {@link NullPointerException}.
+   * Returns a fixed-size list backed by the specified array, similar to {@link
+   * Arrays#asList(Object[])}. The list supports {@link List#set(int, Object)}, but any attempt to
+   * set a value to {@code null} will result in a {@link NullPointerException}.
    *
    * <p>The returned list maintains the values, but not the identities, of {@code Double} objects
    * written to or read from it. For example, whether {@code list.get(0) == list.get(0)} is true for
    * the returned list is unspecified.
    *
-   * <p>The returned list may have unexpected behavior if it contains {@code
-   * NaN}, or if {@code NaN} is used as a parameter to any of its methods.
+   * <p>The returned list may have unexpected behavior if it contains {@code NaN}, or if {@code NaN}
+   * is used as a parameter to any of its methods.
+   *
+   * <p><b>Note:</b> when possible, you should represent your data as an {@link
+   * ImmutableDoubleArray} instead, which has an {@link ImmutableDoubleArray#asList asList} view.
    *
    * @param backingArray the array to back the list
    * @return a list view of the array
@@ -462,6 +486,11 @@ public final class Doubles {
     public Double get(int index) {
       checkElementIndex(index, size());
       return array[start + index];
+    }
+
+    @Override
+    public Spliterator.OfDouble spliterator() {
+      return Spliterators.spliterator(array, start, end, 0);
     }
 
     @Override
@@ -555,11 +584,7 @@ public final class Doubles {
     }
 
     double[] toDoubleArray() {
-      // Arrays.copyOfRange() is not available under GWT
-      int size = size();
-      double[] result = new double[size];
-      System.arraycopy(array, start, result, 0, size);
-      return result;
+      return Arrays.copyOfRange(array, start, end);
     }
 
     private static final long serialVersionUID = 0;

@@ -26,6 +26,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.concurrent.LazyInit;
+import com.google.j2objc.annotations.RetainedWith;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,6 +34,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.stream.Collector;
@@ -51,10 +53,10 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
       ImmutableCollection.SPLITERATOR_CHARACTERISTICS | Spliterator.DISTINCT;
 
   /**
-   * Returns a {@code Collector} that accumulates the input elements into a new
-   * {@code ImmutableSet}.  Elements are added in encounter order; if the
-   * elements contain duplicates (according to {@link Object#equals(Object)}),
-   * only the first duplicate in encounter order will appear in the result.
+   * Returns a {@code Collector} that accumulates the input elements into a new {@code
+   * ImmutableSet}. Elements appear in the resulting set in the encounter order of the stream; if
+   * the stream contains duplicates (according to {@link Object#equals(Object)}), only the first
+   * duplicate in encounter order will appear in the result.
    *
    * @since 21.0
    */
@@ -198,7 +200,7 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
       return construct(uniques, elements);
     } else {
       Object[] uniqueElements =
-          (uniques < elements.length) ? ObjectArrays.arraysCopyOf(elements, uniques) : elements;
+          (uniques < elements.length) ? Arrays.copyOf(elements, uniques) : elements;
       return new RegularImmutableSet<E>(uniqueElements, hashCode, table, mask);
     }
   }
@@ -253,7 +255,8 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
      * TODO(lowasser): consider checking for ImmutableAsList here
      * TODO(lowasser): consider checking for Multiset here
      */
-    if (elements instanceof ImmutableSet && !(elements instanceof ImmutableSortedSet)) {
+    // Don't refer to ImmutableSortedSet by name so it won't pull in all that code
+    if (elements instanceof ImmutableSet && !(elements instanceof SortedSet)) {
       @SuppressWarnings("unchecked") // all supported methods are covariant
       ImmutableSet<E> set = (ImmutableSet<E>) elements;
       if (!set.isPartialView()) {
@@ -357,6 +360,7 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
   public abstract UnmodifiableIterator<E> iterator();
 
   @LazyInit
+  @RetainedWith
   private transient ImmutableList<E> asList;
 
   @Override
@@ -449,6 +453,8 @@ public abstract class ImmutableSet<E> extends ImmutableCollection<E> implements 
    *           .addAll(WEBSAFE_COLORS)
    *           .add(new Color(0, 191, 255))
    *           .build();}</pre>
+   *
+   * <p>Elements appear in the resulting set in the same order they were first added to the builder.
    *
    * <p>Building does not change the state of the builder, so it is still possible to add more
    * elements and to build again.

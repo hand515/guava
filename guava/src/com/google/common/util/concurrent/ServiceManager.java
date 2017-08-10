@@ -48,12 +48,10 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.SetMultimap;
-import com.google.common.util.concurrent.ListenerCallQueue.Callback;
 import com.google.common.util.concurrent.Service.State;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.j2objc.annotations.WeakOuter;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -122,18 +120,28 @@ import javax.annotation.concurrent.GuardedBy;
 @GwtIncompatible
 public final class ServiceManager {
   private static final Logger logger = Logger.getLogger(ServiceManager.class.getName());
-  private static final Callback<Listener> HEALTHY_CALLBACK =
-      new Callback<Listener>("healthy()") {
+  private static final ListenerCallQueue.Event<Listener> HEALTHY_EVENT =
+      new ListenerCallQueue.Event<Listener>() {
         @Override
-        void call(Listener listener) {
+        public void call(Listener listener) {
           listener.healthy();
         }
-      };
-  private static final Callback<Listener> STOPPED_CALLBACK =
-      new Callback<Listener>("stopped()") {
+
         @Override
-        void call(Listener listener) {
+        public String toString() {
+          return "healthy()";
+        }
+      };
+  private static final ListenerCallQueue.Event<Listener> STOPPED_EVENT =
+      new ListenerCallQueue.Event<Listener>() {
+        @Override
+        public void call(Listener listener) {
           listener.stopped();
+        }
+
+        @Override
+        public String toString() {
+          return "stopped()";
         }
       };
 
@@ -203,8 +211,7 @@ public final class ServiceManager {
     }
     this.state = new ServiceManagerState(copy);
     this.services = copy;
-    WeakReference<ServiceManagerState> stateReference =
-        new WeakReference<ServiceManagerState>(state);
+    WeakReference<ServiceManagerState> stateReference = new WeakReference<>(state);
     for (Service service : copy) {
       service.addListener(new ServiceListener(service, stateReference), directExecutor());
       // We check the state after adding the listener as a way to ensure that our listener was added
@@ -449,6 +456,7 @@ public final class ServiceManager {
       }
 
       @Override
+      @GuardedBy("ServiceManagerState.this.monitor")
       public boolean isSatisfied() {
         // All services have started or some service has terminated/failed.
         return states.count(RUNNING) == numberOfServices
@@ -470,15 +478,14 @@ public final class ServiceManager {
       }
 
       @Override
+      @GuardedBy("ServiceManagerState.this.monitor")
       public boolean isSatisfied() {
         return states.count(TERMINATED) + states.count(FAILED) == numberOfServices;
       }
     }
 
     /** The listeners to notify during a state transition. */
-    @GuardedBy("monitor")
-    final List<ListenerCallQueue<Listener>> listeners =
-        Collections.synchronizedList(new ArrayList<ListenerCallQueue<Listener>>());
+    final ListenerCallQueue<Listener> listeners = new ListenerCallQueue<>();
 
     /**
      * It is implicitly assumed that all the services are NEW and that they will all remain NEW
@@ -536,17 +543,7 @@ public final class ServiceManager {
     }
 
     void addListener(Listener listener, Executor executor) {
-      checkNotNull(listener, "listener");
-      checkNotNull(executor, "executor");
-      monitor.enter();
-      try {
-        // no point in adding a listener that will never be called
-        if (!stoppedGuard.isSatisfied()) {
-          listeners.add(new ListenerCallQueue<Listener>(listener, executor));
-        }
-      } finally {
-        monitor.leave();
-      }
+      listeners.addListener(listener, executor);
     }
 
     void awaitHealthy() {
@@ -685,52 +682,52 @@ public final class ServiceManager {
 
         // Did a service fail?
         if (to == FAILED) {
-          fireFailedListeners(service);
+          enqueueFailedEvent(service);
         }
 
         if (states.count(RUNNING) == numberOfServices) {
           // This means that the manager is currently healthy. N.B. If other threads call isHealthy
           // they are not guaranteed to get 'true', because any service could fail right now.
-          fireHealthyListeners();
+          enqueueHealthyEvent();
         } else if (states.count(TERMINATED) + states.count(FAILED) == numberOfServices) {
-          fireStoppedListeners();
+          enqueueStoppedEvent();
         }
       } finally {
         monitor.leave();
         // Run our executors outside of the lock
-        executeListeners();
+        dispatchListenerEvents();
       }
     }
 
-    @GuardedBy("monitor")
-    void fireStoppedListeners() {
-      STOPPED_CALLBACK.enqueueOn(listeners);
+    void enqueueStoppedEvent() {
+      listeners.enqueue(STOPPED_EVENT);
     }
 
-    @GuardedBy("monitor")
-    void fireHealthyListeners() {
-      HEALTHY_CALLBACK.enqueueOn(listeners);
+    void enqueueHealthyEvent() {
+      listeners.enqueue(HEALTHY_EVENT);
     }
 
-    @GuardedBy("monitor")
-    void fireFailedListeners(final Service service) {
-      new Callback<Listener>("failed({service=" + service + "})") {
-        @Override
-        void call(Listener listener) {
-          listener.failure(service);
-        }
-      }.enqueueOn(listeners);
+    void enqueueFailedEvent(final Service service) {
+      listeners.enqueue(
+          new ListenerCallQueue.Event<Listener>() {
+            @Override
+            public void call(Listener listener) {
+              listener.failure(service);
+            }
+
+            @Override
+            public String toString() {
+              return "failed({service=" + service + "})";
+            }
+          });
     }
 
     /** Attempts to execute all the listeners in {@link #listeners}. */
-    void executeListeners() {
+    void dispatchListenerEvents() {
       checkState(
           !monitor.isOccupiedByCurrentThread(),
           "It is incorrect to execute listeners with the monitor held.");
-      // iterate by index to avoid concurrent modification exceptions
-      for (int i = 0; i < listeners.size(); i++) {
-        listeners.get(i).execute();
-      }
+      listeners.dispatch();
     }
 
     @GuardedBy("monitor")
@@ -740,6 +737,9 @@ public final class ServiceManager {
             new IllegalStateException(
                 "Expected to be healthy after starting. The following services are not running: "
                     + Multimaps.filterKeys(servicesByState, not(equalTo(RUNNING))));
+        for (Service service : servicesByState.get(State.FAILED)) {
+          exception.addSuppressed(new FailedService(service));
+        }
         throw exception;
       }
     }
@@ -809,6 +809,11 @@ public final class ServiceManager {
         // Log before the transition, so that if the process exits in response to server failure,
         // there is a higher likelihood that the cause will be in the logs.
         boolean log = !(service instanceof NoOpService);
+        /*
+         * We have already exposed startup exceptions to the user in the form of suppressed
+         * exceptions. We don't need to log those exceptions again.
+         */
+        log &= from != State.STARTING;
         if (log) {
           logger.log(
               Level.SEVERE,
@@ -842,4 +847,14 @@ public final class ServiceManager {
 
   /** This is never thrown but only used for logging. */
   private static final class EmptyServiceManagerWarning extends Throwable {}
+
+  private static final class FailedService extends Throwable {
+    FailedService(Service service) {
+      super(
+          service.toString(),
+          service.failureCause(),
+          false /* don't enable suppression */,
+          false /* don't calculate a stack trace. */);
+    }
+  }
 }

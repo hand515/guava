@@ -427,6 +427,33 @@ public class ImmutableListTest extends TestCase {
       assertEquals(1, result.size());
     }
 
+    public void testSortedCopyOf_natural() {
+      Collection<Integer> c = MinimalCollection.of(4, 16, 10, -1, 5);
+      ImmutableList<Integer> list = ImmutableList.sortedCopyOf(c);
+      assertEquals(asList(-1, 4, 5, 10, 16), list);
+    }
+
+    public void testSortedCopyOf_natural_empty() {
+      Collection<Integer> c = MinimalCollection.of();
+      ImmutableList<Integer> list = ImmutableList.sortedCopyOf(c);
+      assertEquals(asList(), list);
+    }
+
+    public void testSortedCopyOf_natural_singleton() {
+      Collection<Integer> c = MinimalCollection.of(100);
+      ImmutableList<Integer> list = ImmutableList.sortedCopyOf(c);
+      assertEquals(asList(100), list);
+    }
+
+    public void testSortedCopyOf_natural_containsNull() {
+      Collection<Integer> c = MinimalCollection.of(1, 3, null, 2);
+      try {
+        ImmutableList.sortedCopyOf(c);
+        fail("Expected NPE");
+      } catch (NullPointerException expected) {
+      }
+    }
+
     public void testSortedCopyOf() {
       Collection<String> c = MinimalCollection.of("a", "b", "A", "c");
       List<String> list = ImmutableList.sortedCopyOf(String.CASE_INSENSITIVE_ORDER, c);
@@ -481,10 +508,6 @@ public class ImmutableListTest extends TestCase {
 
       assertTrue(concurrentlyMutatedList.getAllStates()
           .contains(copyOfIterable));
-
-      // Check that we didn't end up with a RegularImmutableList of size 1.
-      assertEquals(copyOfIterable.size() == 1,
-          copyOfIterable instanceof SingletonImmutableList);
     }
 
     private static void runConcurrentlyMutatedTest(WrapWithIterable wrap) {
@@ -616,49 +639,47 @@ public class ImmutableListTest extends TestCase {
     private static ConcurrentlyMutatedList<Integer> newConcurrentlyMutatedList(
         final Collection<Integer> initialContents,
         final Iterable<ListFrobber> actionsToPerformConcurrently) {
-      InvocationHandler invocationHandler = new InvocationHandler() {
-        final CopyOnWriteArrayList<Integer> delegate =
-            new CopyOnWriteArrayList<Integer>(initialContents);
+      InvocationHandler invocationHandler =
+          new InvocationHandler() {
+            final CopyOnWriteArrayList<Integer> delegate =
+                new CopyOnWriteArrayList<>(initialContents);
 
-        final Method getAllStatesMethod = getOnlyElement(asList(
-            ConcurrentlyMutatedList.class.getDeclaredMethods()));
+            final Method getAllStatesMethod =
+                getOnlyElement(asList(ConcurrentlyMutatedList.class.getDeclaredMethods()));
 
-        final Iterator<ListFrobber> remainingActions =
-            actionsToPerformConcurrently.iterator();
+            final Iterator<ListFrobber> remainingActions = actionsToPerformConcurrently.iterator();
 
-        final Set<List<Integer>> allStates = newHashSet();
+            final Set<List<Integer>> allStates = newHashSet();
 
-        @Override
-        public Object invoke(Object proxy, Method method,
-            Object[] args) throws Throwable {
-          return method.equals(getAllStatesMethod)
-              ? getAllStates()
-              : invokeListMethod(method, args);
-        }
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+              return method.equals(getAllStatesMethod)
+                  ? getAllStates()
+                  : invokeListMethod(method, args);
+            }
 
-        private Set<List<Integer>> getAllStates() {
-          return allStates;
-        }
+            private Set<List<Integer>> getAllStates() {
+              return allStates;
+            }
 
-        private Object invokeListMethod(Method method, Object[] args)
-            throws Throwable {
-          try {
-            Object returnValue = method.invoke(delegate, args);
-            mutateDelegate();
-            return returnValue;
-          } catch (InvocationTargetException e) {
-            throw e.getCause();
-          } catch (IllegalAccessException e) {
-            throw new AssertionError(e);
-          }
-        }
+            private Object invokeListMethod(Method method, Object[] args) throws Throwable {
+              try {
+                Object returnValue = method.invoke(delegate, args);
+                mutateDelegate();
+                return returnValue;
+              } catch (InvocationTargetException e) {
+                throw e.getCause();
+              } catch (IllegalAccessException e) {
+                throw new AssertionError(e);
+              }
+            }
 
-        private void mutateDelegate() {
-          allStates.add(ImmutableList.copyOf(delegate));
-          remainingActions.next().perform(delegate);
-          allStates.add(ImmutableList.copyOf(delegate));
-        }
-      };
+            private void mutateDelegate() {
+              allStates.add(ImmutableList.copyOf(delegate));
+              remainingActions.next().perform(delegate);
+              allStates.add(ImmutableList.copyOf(delegate));
+            }
+          };
 
       @SuppressWarnings("unchecked")
       ConcurrentlyMutatedList<Integer> list =

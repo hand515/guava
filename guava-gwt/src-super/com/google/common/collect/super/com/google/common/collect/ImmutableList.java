@@ -57,7 +57,7 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
   }
 
   public static <E> ImmutableList<E> of(E element) {
-    return new SingletonImmutableList<E>(element);
+    return new SingletonImmutableList<E>(checkNotNull(element));
   }
 
   public static <E> ImmutableList<E> of(E e1, E e2) {
@@ -165,9 +165,7 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
       case 0:
         return of();
       case 1:
-        @SuppressWarnings("unchecked") // collection had only Es in it
-        ImmutableList<E> list = new SingletonImmutableList<E>((E) elements[0]);
-        return list;
+        return of((E) elements[0]);
       default:
         return new RegularImmutableList<E>(ImmutableList.<E>nullCheckedList(elements));
     }
@@ -180,7 +178,7 @@ public abstract class ImmutableList<E> extends ImmutableCollection<E>
       case 0:
         return of();
       case 1:
-        return new SingletonImmutableList<E>(list.iterator().next());
+        return of(list.get(0));
       default:
         @SuppressWarnings("unchecked")
         List<E> castedList = (List<E>) list;
