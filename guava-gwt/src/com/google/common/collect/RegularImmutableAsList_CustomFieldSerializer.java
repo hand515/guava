@@ -16,6 +16,8 @@
 
 package com.google.common.collect;
 
+import static com.google.common.collect.Platform.checkGwtRpcEnabled;
+
 import com.google.common.annotations.GwtCompatible;
 import com.google.gwt.user.client.rpc.SerializationException;
 import com.google.gwt.user.client.rpc.SerializationStreamReader;
@@ -36,14 +38,16 @@ public class RegularImmutableAsList_CustomFieldSerializer {
 
   public static RegularImmutableAsList<Object> instantiate(SerializationStreamReader reader)
       throws SerializationException {
-    ArrayList<Object> elements = new ArrayList<Object>();
+    checkGwtRpcEnabled();
+    ArrayList<Object> elements = new ArrayList<>();
     Collection_CustomFieldSerializerBase.deserialize(reader, elements);
     ImmutableList<Object> delegate = ImmutableList.copyOf(elements);
-    return new RegularImmutableAsList<Object>(delegate, delegate);
+    return new RegularImmutableAsList<>(delegate, delegate);
   }
 
   public static void serialize(SerializationStreamWriter writer, RegularImmutableAsList<?> instance)
       throws SerializationException {
+    checkGwtRpcEnabled();
     Collection_CustomFieldSerializerBase.serialize(writer, instance);
   }
 }

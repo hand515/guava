@@ -77,7 +77,7 @@ public class QueuesTest extends TestCase {
   @Override
   public void tearDown() throws InterruptedException {
     threadPool.shutdown();
-    assertTrue("Some worker didn't finish in time", threadPool.awaitTermination(1, SECONDS));
+    assertTrue("Some worker didn't finish in time", threadPool.awaitTermination(10, SECONDS));
   }
 
   private static <T> int drain(
@@ -222,6 +222,7 @@ public class QueuesTest extends TestCase {
     Future<?> possiblyIgnoredError =
         threadPool.submit(
             new Callable<Void>() {
+              @Override
               public Void call() throws InterruptedException {
                 new Producer(q, 50).call();
                 new Interrupter(mainThread).run();

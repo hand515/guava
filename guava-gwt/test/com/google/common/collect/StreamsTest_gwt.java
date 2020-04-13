@@ -18,6 +18,26 @@ public class StreamsTest_gwt extends com.google.gwt.junit.client.GWTTestCase {
 @Override public String getModuleName() {
   return "com.google.common.collect.testModule";
 }
+public void testConcatInfiniteStream() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcatInfiniteStream();
+}
+
+public void testConcatInfiniteStream_double() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcatInfiniteStream_double();
+}
+
+public void testConcatInfiniteStream_int() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcatInfiniteStream_int();
+}
+
+public void testConcatInfiniteStream_long() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcatInfiniteStream_long();
+}
+
 public void testConcat_doubleStream() throws Exception {
   com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
   testCase.testConcat_doubleStream();
@@ -36,6 +56,21 @@ public void testConcat_longStream() throws Exception {
 public void testConcat_refStream() throws Exception {
   com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
   testCase.testConcat_refStream();
+}
+
+public void testConcat_refStream_closeIsPropagated() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcat_refStream_closeIsPropagated();
+}
+
+public void testConcat_refStream_closeIsPropagated_Stream_concat() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcat_refStream_closeIsPropagated_Stream_concat();
+}
+
+public void testConcat_refStream_closeIsPropagated_Stream_flatMap() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testConcat_refStream_closeIsPropagated_Stream_flatMap();
 }
 
 public void testConcat_refStream_parallel() throws Exception {
@@ -78,9 +113,39 @@ public void testMapWithIndex_arrayListSource() throws Exception {
   testCase.testMapWithIndex_arrayListSource();
 }
 
+public void testMapWithIndex_closeIsPropagated_sizedSource() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_closeIsPropagated_sizedSource();
+}
+
+public void testMapWithIndex_closeIsPropagated_unsizedSource() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_closeIsPropagated_unsizedSource();
+}
+
+public void testMapWithIndex_doubleStream_closeIsPropagated_sized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_doubleStream_closeIsPropagated_sized();
+}
+
+public void testMapWithIndex_doubleStream_closeIsPropagated_unsized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_doubleStream_closeIsPropagated_unsized();
+}
+
 public void testMapWithIndex_intStream() throws Exception {
   com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
   testCase.testMapWithIndex_intStream();
+}
+
+public void testMapWithIndex_intStream_closeIsPropagated_sized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_intStream_closeIsPropagated_sized();
+}
+
+public void testMapWithIndex_intStream_closeIsPropagated_unsized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_intStream_closeIsPropagated_unsized();
 }
 
 public void testMapWithIndex_linkedHashSetSource() throws Exception {
@@ -91,6 +156,16 @@ public void testMapWithIndex_linkedHashSetSource() throws Exception {
 public void testMapWithIndex_longStream() throws Exception {
   com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
   testCase.testMapWithIndex_longStream();
+}
+
+public void testMapWithIndex_longStream_closeIsPropagated_sized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_longStream_closeIsPropagated_sized();
+}
+
+public void testMapWithIndex_longStream_closeIsPropagated_unsized() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testMapWithIndex_longStream_closeIsPropagated_unsized();
 }
 
 public void testMapWithIndex_unsizedSource() throws Exception {
@@ -156,5 +231,10 @@ public void testZipFiniteWithInfinite() throws Exception {
 public void testZipInfiniteWithInfinite() throws Exception {
   com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
   testCase.testZipInfiniteWithInfinite();
+}
+
+public void testZip_closeIsPropagated() throws Exception {
+  com.google.common.collect.StreamsTest testCase = new com.google.common.collect.StreamsTest();
+  testCase.testZip_closeIsPropagated();
 }
 }

@@ -17,8 +17,9 @@
 package com.google.common.graph;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.util.Iterator;
 import java.util.Set;
-import javax.annotation.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * An interface for representing and manipulating an origin node's adjacent nodes and edge values in
@@ -35,6 +36,13 @@ interface GraphConnections<N, V> {
   Set<N> predecessors();
 
   Set<N> successors();
+
+  /**
+   * Returns an iterator over the incident edges.
+   *
+   * @param thisNode The node that this all of the connections in this class are connected to.
+   */
+  Iterator<EndpointPair<N>> incidentEdgeIterator(N thisNode);
 
   /**
    * Returns the value associated with the edge connecting the origin node to {@code node}, or null

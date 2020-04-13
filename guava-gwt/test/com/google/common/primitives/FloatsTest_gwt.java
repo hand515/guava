@@ -103,19 +103,29 @@ public void testMax() throws Exception {
   testCase.testMax();
 }
 
-public void testMax_noArgs() throws Exception {
-  com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
-  testCase.testMax_noArgs();
-}
-
 public void testMin() throws Exception {
   com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
   testCase.testMin();
 }
 
-public void testMin_noArgs() throws Exception {
+public void testReverse() throws Exception {
   com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
-  testCase.testMin_noArgs();
+  testCase.testReverse();
+}
+
+public void testReverseIndexed() throws Exception {
+  com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
+  testCase.testReverseIndexed();
+}
+
+public void testSortDescending() throws Exception {
+  com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
+  testCase.testSortDescending();
+}
+
+public void testSortDescendingIndexed() throws Exception {
+  com.google.common.primitives.FloatsTest testCase = new com.google.common.primitives.FloatsTest();
+  testCase.testSortDescendingIndexed();
 }
 
 public void testStringConverter_convertError() throws Exception {

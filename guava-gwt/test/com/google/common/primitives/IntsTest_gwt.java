@@ -128,24 +128,34 @@ public void testMax() throws Exception {
   testCase.testMax();
 }
 
-public void testMax_noArgs() throws Exception {
-  com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
-  testCase.testMax_noArgs();
-}
-
 public void testMin() throws Exception {
   com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
   testCase.testMin();
 }
 
-public void testMin_noArgs() throws Exception {
+public void testReverse() throws Exception {
   com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
-  testCase.testMin_noArgs();
+  testCase.testReverse();
+}
+
+public void testReverseIndexed() throws Exception {
+  com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
+  testCase.testReverseIndexed();
 }
 
 public void testSaturatedCast() throws Exception {
   com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
   testCase.testSaturatedCast();
+}
+
+public void testSortDescending() throws Exception {
+  com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
+  testCase.testSortDescending();
+}
+
+public void testSortDescendingIndexed() throws Exception {
+  com.google.common.primitives.IntsTest testCase = new com.google.common.primitives.IntsTest();
+  testCase.testSortDescendingIndexed();
 }
 
 public void testStringConverter_convert() throws Exception {

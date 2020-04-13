@@ -46,8 +46,8 @@ import java.util.Set;
 import junit.framework.TestSuite;
 
 /**
- * Creates, based on your criteria, a JUnit test suite that exhaustively tests
- * a {@code Multiset} implementation.
+ * Creates, based on your criteria, a JUnit test suite that exhaustively tests a {@code Multiset}
+ * implementation.
  *
  * @author Jared Levy
  * @author Louis Wasserman
@@ -88,8 +88,7 @@ public class MultisetTestSuiteBuilder<E>
   }
 
   private static Set<Feature<?>> computeEntrySetFeatures(Set<Feature<?>> features) {
-    Set<Feature<?>> derivedFeatures = new HashSet<>();
-    derivedFeatures.addAll(features);
+    Set<Feature<?>> derivedFeatures = new HashSet<>(features);
     derivedFeatures.remove(CollectionFeature.GENERAL_PURPOSE);
     derivedFeatures.remove(CollectionFeature.SUPPORTS_ADD);
     derivedFeatures.remove(CollectionFeature.ALLOWS_NULL_VALUES);
@@ -101,8 +100,7 @@ public class MultisetTestSuiteBuilder<E>
   }
 
   static Set<Feature<?>> computeElementSetFeatures(Set<Feature<?>> features) {
-    Set<Feature<?>> derivedFeatures = new HashSet<>();
-    derivedFeatures.addAll(features);
+    Set<Feature<?>> derivedFeatures = new HashSet<>(features);
     derivedFeatures.remove(CollectionFeature.GENERAL_PURPOSE);
     derivedFeatures.remove(CollectionFeature.SUPPORTS_ADD);
     if (!derivedFeatures.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS)) {
@@ -112,8 +110,7 @@ public class MultisetTestSuiteBuilder<E>
   }
 
   private static Set<Feature<?>> computeReserializedMultisetFeatures(Set<Feature<?>> features) {
-    Set<Feature<?>> derivedFeatures = new HashSet<>();
-    derivedFeatures.addAll(features);
+    Set<Feature<?>> derivedFeatures = new HashSet<>(features);
     derivedFeatures.remove(CollectionFeature.SERIALIZABLE);
     derivedFeatures.remove(CollectionFeature.SERIALIZABLE_INCLUDING_VIEWS);
     return derivedFeatures;
@@ -202,7 +199,7 @@ public class MultisetTestSuiteBuilder<E>
     @Override
     public SampleElements<Multiset.Entry<E>> samples() {
       SampleElements<E> samples = gen.samples();
-      return new SampleElements<Multiset.Entry<E>>(
+      return new SampleElements<>(
           Multisets.immutableEntry(samples.e0(), 3),
           Multisets.immutableEntry(samples.e1(), 4),
           Multisets.immutableEntry(samples.e2(), 1),

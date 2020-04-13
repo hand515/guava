@@ -108,24 +108,34 @@ public void testMax() throws Exception {
   testCase.testMax();
 }
 
-public void testMax_noArgs() throws Exception {
-  com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
-  testCase.testMax_noArgs();
-}
-
 public void testMin() throws Exception {
   com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
   testCase.testMin();
 }
 
-public void testMin_noArgs() throws Exception {
+public void testReverse() throws Exception {
   com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
-  testCase.testMin_noArgs();
+  testCase.testReverse();
+}
+
+public void testReverseIndexed() throws Exception {
+  com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
+  testCase.testReverseIndexed();
 }
 
 public void testSaturatedCast() throws Exception {
   com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
   testCase.testSaturatedCast();
+}
+
+public void testSortDescending() throws Exception {
+  com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
+  testCase.testSortDescending();
+}
+
+public void testSortDescendingIndexed() throws Exception {
+  com.google.common.primitives.ShortsTest testCase = new com.google.common.primitives.ShortsTest();
+  testCase.testSortDescendingIndexed();
 }
 
 public void testStringConverter_convert() throws Exception {

@@ -16,6 +16,8 @@
 
 package com.google.common.collect;
 
+import static com.google.common.collect.Platform.checkGwtRpcEnabled;
+
 import com.google.gwt.user.client.rpc.SerializationException;
 import com.google.gwt.user.client.rpc.SerializationStreamReader;
 import com.google.gwt.user.client.rpc.SerializationStreamWriter;
@@ -24,8 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * This class implements the GWT serialization of {@link
- * RegularImmutableList}.
+ * This class implements the GWT serialization of {@link RegularImmutableList}.
  *
  * @author Hayward Chan
  */
@@ -36,7 +37,8 @@ public class RegularImmutableList_CustomFieldSerializer {
 
   public static RegularImmutableList<Object> instantiate(SerializationStreamReader reader)
       throws SerializationException {
-    List<Object> elements = new ArrayList<Object>();
+    checkGwtRpcEnabled();
+    List<Object> elements = new ArrayList<>();
     Collection_CustomFieldSerializerBase.deserialize(reader, elements);
     /*
      * For this custom field serializer to be invoked, the list must have been
@@ -49,6 +51,7 @@ public class RegularImmutableList_CustomFieldSerializer {
 
   public static void serialize(SerializationStreamWriter writer, RegularImmutableList<?> instance)
       throws SerializationException {
+    checkGwtRpcEnabled();
     Collection_CustomFieldSerializerBase.serialize(writer, instance);
   }
 }
